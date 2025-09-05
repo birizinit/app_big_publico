@@ -16,6 +16,20 @@ const Login = ({ onLogin }) => {
   });
   const [particles, setParticles] = useState([]);
 
+  // 🔹 Mensagens personalizadas Firebase
+  const firebaseErrorMessages = {
+    "auth/invalid-email": "O e-mail informado é inválido.",
+    "auth/user-disabled": "Esta conta foi desativada.",
+    "auth/user-not-found": "Nenhuma conta encontrada com este e-mail.",
+    "auth/wrong-password": "Senha incorreta. Tente novamente.",
+    "auth/email-already-in-use": "Este e-mail já está em uso.",
+    "auth/weak-password": "A senha deve ter pelo menos 6 caracteres.",
+    "auth/missing-password": "Digite sua senha.",
+    "auth/too-many-requests": "Muitas tentativas de login. Tente novamente mais tarde.",
+    "auth/network-request-failed": "Falha de conexão. Verifique sua internet.",
+    "auth/operation-not-allowed": "Este tipo de login não está habilitado."
+  };
+
   // Partículas de fundo
   useEffect(() => {
     const newParticles = Array.from({ length: 15 }, (_, i) => ({
@@ -54,16 +68,18 @@ const Login = ({ onLogin }) => {
       if (isLogin) {
         // 🔹 LOGIN
         await signInWithEmailAndPassword(auth, formData.email, formData.password);
-        alert("Login realizado com sucesso!");
+        alert("✅ Login realizado com sucesso!");
         onLogin?.();
       } else {
         // 🔹 CADASTRO
         await createUserWithEmailAndPassword(auth, formData.email, formData.password);
-        alert("Cadastro realizado com sucesso!");
+        alert("🎉 Cadastro realizado com sucesso!");
         setIsLogin(true);
       }
     } catch (err) {
-      alert(err.message);
+      const errorMessage =
+        firebaseErrorMessages[err.code] || "❌ Ocorreu um erro inesperado. Tente novamente.";
+      alert(errorMessage);
     }
   };
 
