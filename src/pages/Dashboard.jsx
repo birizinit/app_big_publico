@@ -1,14 +1,22 @@
-import React, { useEffect, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "../firebase";
-import { supabase } from "../supabaseClient";
+import React, { useEffect, useState } from 'react';
+import WSCard from '../components/WSCard';
+import WSButton from '../components/WSButton';
+import { TrendingUp, TrendingDown, DollarSign, Percent } from 'lucide-react';
+import { auth } from '../firebase'; // corrige o caminho
+import { onAuthStateChanged } from 'firebase/auth';
+import { supabase } from '../supabaseClient';
 
 const Dashboard = () => {
   const [user, setUser] = useState(null);
   const [operations, setOperations] = useState([]);
-  const [kpis, setKpis] = useState({ day: 0, week: 0, month: 0, winRate: 0 });
+  const [kpis, setKpis] = useState({
+    day: 0,
+    week: 0,
+    month: 0,
+    winRate: 0,
+  });
 
-  // Monitorar login/logout do Firebase
+  // Monitorar login/logout
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
@@ -19,17 +27,16 @@ const Dashboard = () => {
         setOperations([]);
       }
     });
-
     return () => unsubscribe();
   }, []);
 
-  // Buscar operações do Supabase
+  // Buscar operações no Supabase
   async function fetchOperations(uid) {
     const { data, error } = await supabase
-      .from("operations")
-      .select("*")
-      .eq("user_id", uid)
-      .order("date", { ascending: false });
+      .from('operations')
+      .select('*')
+      .eq('user_id', uid)
+      .order('date', { ascending: false });
 
     if (!error) {
       setOperations(data);
@@ -37,9 +44,9 @@ const Dashboard = () => {
     }
   }
 
-  // Calcular KPIs básicos
+  // Calcular KPIs
   function calculateKpis(data) {
-    const today = new Date().toISOString().split("T")[0];
+    const today = new Date().toISOString().split('T')[0];
 
     const daily = data
       .filter((op) => op.date === today)
@@ -50,7 +57,7 @@ const Dashboard = () => {
 
     setKpis({
       day: daily,
-      week: 0, // você pode calcular por range de datas
+      week: 0, // você pode calcular semana/mês se quiser
       month: 0,
       winRate,
     });
@@ -60,12 +67,12 @@ const Dashboard = () => {
   async function addOperation(value, note) {
     if (!user) return;
 
-    const { error } = await supabase.from("operations").insert([
+    const { error } = await supabase.from('operations').insert([
       {
-        user_id: user.uid, // UID do Firebase
-        value,
+        user_id: user.uid,
+        value: parseFloat(value),
         note,
-        date: new Date().toISOString().split("T")[0],
+        date: new Date().toISOString().split('T')[0],
       },
     ]);
 
@@ -73,46 +80,101 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="p-6 text-white">
-      {user ? (
-        <>
-          <h1 className="text-2xl font-bold mb-4">
-            Olá, {user.email}! 👋
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight text-white">
+            Bom dia, Trader! 👋
           </h1>
+          <p className="text-[#A9B0BC]">
+            {new Date().toLocaleDateString('pt-BR', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+            })}
+          </p>
+        </div>
+        <WSButton
+          variant="primary"
+          onClick={() => addOperation(100, 'Operação teste')}
+        >
+          Adicionar Operação
+        </WSButton>
+      </div>
 
-          <div className="space-y-2 mb-6">
-            <p>Lucro/Dia: R$ {kpis.day.toFixed(2)}</p>
-            <p>Win Rate: {kpis.winRate.toFixed(1)}%</p>
-          </div>
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { title: 'Lucro/Dia', value: kpis.day, trend: 'up', icon: DollarSign },
+          { title: 'Lucro/Semana', value: kpis.week, trend: 'up', icon: TrendingUp },
+          { title: 'Lucro/Mês', value: kpis.month, trend: 'up', icon: TrendingUp },
+          { title: 'Win Rate', value: kpis.winRate, trend: 'up', icon: Percent },
+        ].map((kpi, index) => {
+          const Icon = kpi.icon;
+          return (
+            <WSCard key={index} variant="premium">
+              <WSCard.Content>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-[#A9B0BC] mb-1">{kpi.title}</p>
+                    <p className="text-2xl font-semibold text-white">
+                      {typeof kpi.value === 'number'
+                        ? kpi.value.toLocaleString('pt-BR', { style: kpi.title === 'Win Rate' ? 'percent' : 'currency', currency: 'BRL', minimumFractionDigits: 2 })
+                        : kpi.value}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-[#C9A227]/10 rounded-xl">
+                    <Icon className="w-6 h-6 text-[#C9A227]" />
+                  </div>
+                </div>
+              </WSCard.Content>
+            </WSCard>
+          );
+        })}
+      </div>
 
-          <button
-            onClick={() => addOperation(100, "Operação teste")}
-            className="bg-yellow-600 px-4 py-2 rounded-lg"
-          >
-            Salvar Operação
-          </button>
-
-          <h2 className="text-xl font-semibold mt-6">Operações Recentes</h2>
-          <ul className="space-y-2 mt-2">
-            {operations.map((op) => (
-              <li
-                key={op.id}
-                className="p-3 bg-gray-800 rounded-lg flex justify-between"
+      {/* Recent Operations */}
+      <WSCard>
+        <WSCard.Header>
+          <WSCard.Title>Operações Recentes</WSCard.Title>
+          <WSCard.Description>Suas últimas operações registradas</WSCard.Description>
+        </WSCard.Header>
+        <WSCard.Content>
+          <div className="space-y-4">
+            {operations.map((op, index) => (
+              <div
+                key={index}
+                className="flex items-center justify-between p-4 bg-[#171B26]/50 rounded-xl"
               >
-                <span>{op.date}</span>
-                <span
-                  className={op.value > 0 ? "text-green-400" : "text-red-400"}
-                >
-                  {op.value > 0 ? "+" : ""}
-                  R$ {op.value.toFixed(2)}
-                </span>
-              </li>
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-2 h-2 rounded-full ${
+                      op.value > 0 ? 'bg-[#43FFAF]' : 'bg-red-400'
+                    }`}
+                  ></div>
+                  <div>
+                    <p className="font-medium text-white">Operação #{String(index + 1).padStart(3, '0')}</p>
+                    <p className="text-sm text-[#A9B0BC]">{op.date}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p
+                    className={`font-semibold ${
+                      op.value > 0 ? 'text-[#43FFAF]' : 'text-red-400'
+                    }`}
+                  >
+                    {op.value > 0 ? '+' : ''}
+                    R$ {op.value.toFixed(2)}
+                  </p>
+                  <p className="text-sm text-[#A9B0BC]">{op.value > 0 ? 'Win' : 'Loss'}</p>
+                </div>
+              </div>
             ))}
-          </ul>
-        </>
-      ) : (
-        <p>Por favor, faça login para ver seu dashboard.</p>
-      )}
+          </div>
+        </WSCard.Content>
+      </WSCard>
     </div>
   );
 };
