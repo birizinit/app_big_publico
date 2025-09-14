@@ -1,187 +1,120 @@
-import React from 'react';
-import WSCard from '../components/WSCard';
-import WSButton from '../components/WSButton';
-import { TrendingUp, TrendingDown, DollarSign, Percent } from 'lucide-react';
+import React, { useEffect, useState } from "react";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "../firebaseClient";
+import { supabase } from "../supabaseClient";
 
 const Dashboard = () => {
-  const kpiData = [
-    {
-      title: 'Lucro/Dia',
-      value: 'R$ 1.247,50',
-      change: '+12.5%',
-      trend: 'up',
-      icon: DollarSign
-    },
-    {
-      title: 'Lucro/Semana',
-      value: 'R$ 8.732,10',
-      change: '+8.3%',
-      trend: 'up',
-      icon: TrendingUp
-    },
-    {
-      title: 'Lucro/Mês',
-      value: 'R$ 34.567,80',
-      change: '+15.7%',
-      trend: 'up',
-      icon: TrendingUp
-    },
-    {
-      title: 'Win Rate',
-      value: '73.2%',
-      change: '+2.1%',
-      trend: 'up',
-      icon: Percent
+  const [user, setUser] = useState(null);
+  const [operations, setOperations] = useState([]);
+  const [kpis, setKpis] = useState({ day: 0, week: 0, month: 0, winRate: 0 });
+
+  // Monitorar login/logout do Firebase
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+        fetchOperations(currentUser.uid);
+      } else {
+        setUser(null);
+        setOperations([]);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Buscar operações do Supabase
+  async function fetchOperations(uid) {
+    const { data, error } = await supabase
+      .from("operations")
+      .select("*")
+      .eq("user_id", uid)
+      .order("date", { ascending: false });
+
+    if (!error) {
+      setOperations(data);
+      calculateKpis(data);
     }
-  ];
+  }
+
+  // Calcular KPIs básicos
+  function calculateKpis(data) {
+    const today = new Date().toISOString().split("T")[0];
+
+    const daily = data
+      .filter((op) => op.date === today)
+      .reduce((acc, op) => acc + op.value, 0);
+
+    const positive = data.filter((op) => op.value > 0).length;
+    const winRate = data.length > 0 ? (positive / data.length) * 100 : 0;
+
+    setKpis({
+      day: daily,
+      week: 0, // você pode calcular por range de datas
+      month: 0,
+      winRate,
+    });
+  }
+
+  // Adicionar nova operação
+  async function addOperation(value, note) {
+    if (!user) return;
+
+    const { error } = await supabase.from("operations").insert([
+      {
+        user_id: user.uid, // UID do Firebase
+        value,
+        note,
+        date: new Date().toISOString().split("T")[0],
+      },
+    ]);
+
+    if (!error) fetchOperations(user.uid);
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-white">
-            Bom dia, Trader! 👋
+    <div className="p-6 text-white">
+      {user ? (
+        <>
+          <h1 className="text-2xl font-bold mb-4">
+            Olá, {user.email}! 👋
           </h1>
-          <p className="text-[#A9B0BC]">
-            {new Date().toLocaleDateString('pt-BR', { 
-              weekday: 'long', 
-              year: 'numeric', 
-              month: 'long', 
-              day: 'numeric' 
-            })}
-          </p>
-        </div>
-        <WSButton variant="primary">
-          Adicionar Operação
-        </WSButton>
-      </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpiData.map((kpi, index) => {
-          const Icon = kpi.icon;
-          return (
-            <WSCard key={index} variant="premium">
-              <WSCard.Content>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-[#A9B0BC] mb-1">
-                      {kpi.title}
-                    </p>
-                    <p className="text-2xl font-semibold text-white">
-                      {kpi.value}
-                    </p>
-                    <p className={`text-sm flex items-center gap-1 mt-1 ${
-                      kpi.trend === 'up' ? 'text-[#43FFAF]' : 'text-red-400'
-                    }`}>
-                      {kpi.trend === 'up' ? (
-                        <TrendingUp className="w-4 h-4" />
-                      ) : (
-                        <TrendingDown className="w-4 h-4" />
-                      )}
-                      {kpi.change}
-                    </p>
-                  </div>
-                  <div className="p-3 bg-[#C9A227]/10 rounded-xl">
-                    <Icon className="w-6 h-6 text-[#C9A227]" />
-                  </div>
-                </div>
-              </WSCard.Content>
-            </WSCard>
-          );
-        })}
-      </div>
-
-      {/* Quick Add Form */}
-      <WSCard>
-        <WSCard.Header>
-          <WSCard.Title>Adicionar resultado de hoje</WSCard.Title>
-          <WSCard.Description>
-            Registre rapidamente o resultado da sua operação
-          </WSCard.Description>
-        </WSCard.Header>
-        <WSCard.Content>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="text-sm font-medium text-white mb-2 block">
-                Data
-              </label>
-              <input 
-                type="date" 
-                className="bg-[#171B26] border border-[#1E2430] rounded-2xl px-4 py-3 text-white placeholder:text-[#A9B0BC] focus:outline-none focus:ring-2 focus:ring-[#C9A227] focus:border-transparent transition-all duration-200 w-full"
-                defaultValue={new Date().toISOString().split('T')[0]}
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-white mb-2 block">
-                Valor (R$)
-              </label>
-              <input 
-                type="number" 
-                className="bg-[#171B26] border border-[#1E2430] rounded-2xl px-4 py-3 text-white placeholder:text-[#A9B0BC] focus:outline-none focus:ring-2 focus:ring-[#C9A227] focus:border-transparent transition-all duration-200 w-full"
-                placeholder="0,00"
-                step="0.01"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-white mb-2 block">
-                Observação
-              </label>
-              <input 
-                type="text" 
-                className="bg-[#171B26] border border-[#1E2430] rounded-2xl px-4 py-3 text-white placeholder:text-[#A9B0BC] focus:outline-none focus:ring-2 focus:ring-[#C9A227] focus:border-transparent transition-all duration-200 w-full"
-                placeholder="Opcional"
-              />
-            </div>
+          <div className="space-y-2 mb-6">
+            <p>Lucro/Dia: R$ {kpis.day.toFixed(2)}</p>
+            <p>Win Rate: {kpis.winRate.toFixed(1)}%</p>
           </div>
-        </WSCard.Content>
-        <WSCard.Footer>
-          <WSButton variant="primary" className="ml-auto">
+
+          <button
+            onClick={() => addOperation(100, "Operação teste")}
+            className="bg-yellow-600 px-4 py-2 rounded-lg"
+          >
             Salvar Operação
-          </WSButton>
-        </WSCard.Footer>
-      </WSCard>
+          </button>
 
-      {/* Recent Operations */}
-      <WSCard>
-        <WSCard.Header>
-          <WSCard.Title>Operações Recentes</WSCard.Title>
-          <WSCard.Description>
-            Suas últimas operações registradas
-          </WSCard.Description>
-        </WSCard.Header>
-        <WSCard.Content>
-          <div className="space-y-4">
-            {[1, 2, 3].map((_, index) => (
-              <div key={index} className="flex items-center justify-between p-4 bg-[#171B26]/50 rounded-xl">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 bg-[#43FFAF] rounded-full"></div>
-                  <div>
-                    <p className="font-medium text-white">
-                      Operação #{String(index + 1).padStart(3, '0')}
-                    </p>
-                    <p className="text-sm text-[#A9B0BC]">
-                      Hoje, 14:30
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="font-semibold text-[#43FFAF]">
-                    +R$ {(Math.random() * 1000 + 100).toFixed(2)}
-                  </p>
-                  <p className="text-sm text-[#A9B0BC]">
-                    Win
-                  </p>
-                </div>
-              </div>
+          <h2 className="text-xl font-semibold mt-6">Operações Recentes</h2>
+          <ul className="space-y-2 mt-2">
+            {operations.map((op) => (
+              <li
+                key={op.id}
+                className="p-3 bg-gray-800 rounded-lg flex justify-between"
+              >
+                <span>{op.date}</span>
+                <span
+                  className={op.value > 0 ? "text-green-400" : "text-red-400"}
+                >
+                  {op.value > 0 ? "+" : ""}
+                  R$ {op.value.toFixed(2)}
+                </span>
+              </li>
             ))}
-          </div>
-        </WSCard.Content>
-      </WSCard>
+          </ul>
+        </>
+      ) : (
+        <p>Por favor, faça login para ver seu dashboard.</p>
+      )}
     </div>
   );
 };
 
 export default Dashboard;
-
