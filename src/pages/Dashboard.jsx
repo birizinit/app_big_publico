@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "../firebaseClient";
+import { auth } from "../firebase";
 import { supabase } from "../supabaseClient";
 
 const Dashboard = () => {
